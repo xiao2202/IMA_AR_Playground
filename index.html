@@ -1,17 +1,58 @@
-
+<!doctype html>
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/dist/mindar-image.prod.js"></script>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <style>
+      html, body { margin:0; padding:0; height:100%; overflow:hidden; }
+      #container { position:relative; width:100%; height:100vh; }
+      #startBtn {
+        position:absolute; z-index:2; left:50%; top:50%;
+        transform:translate(-50%,-50%);
+        padding:12px 20px; font-size:16px;
+      }
+    </style>
   </head>
   <body>
-    <a-scene mindar-image="imageTargetSrc: ./targets.mind;" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
-      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-      <a-entity mindar-image-target="targetIndex: 0">
-        <a-plane color="blue" opaciy="0.5" position="0 0 0" height="0.552" width="1" rotation="0 0 0"></a-plane>
-      </a-entity>
-    </a-scene>
+    <div id="container">
+      <button id="startBtn">Start AR</button>
+
+      <a-scene
+        embedded
+        mindar-image="imageTargetSrc: ./targets.mind"
+        vr-mode-ui="enabled: false"
+        device-orientation-permission-ui="enabled: false">
+        
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+        <a-entity mindar-image-target="targetIndex: 0">
+          <a-plane color="blue" opacity="0.5"
+                   position="0 0 0" height="0.552" width="1" rotation="0 0 0">
+          </a-plane>
+        </a-entity>
+      </a-scene>
+    </div>
+
+    <script>
+      // Start AR on a user gesture (reliable camera prompt, esp. iOS)
+      const startBtn = document.getElementById('startBtn');
+      startBtn.addEventListener('click', async () => {
+        const sceneEl = document.querySelector('a-scene');
+        const arSystem = sceneEl.systems['mindar-image-system'];
+        try {
+          // Optionally poke getUserMedia to surface the permission dialog
+          // (then immediately stop the temp stream)
+          const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
+          tmp.getTracks().forEach(t => t.stop());
+
+          await arSystem.start(); // starts video feed + tracking
+          startBtn.style.display = 'none';
+        } catch (e) {
+          alert('Camera permission denied or not available: ' + e);
+        }
+      });
+    </script>
   </body>
 </html>
