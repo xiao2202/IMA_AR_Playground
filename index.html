@@ -2,27 +2,35 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <!-- MindAR core must load before the A-Frame adapter -->
-    <script src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/dist/mindar-image.prod.js"></script>
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+    <!-- Use reliable versions and the correct order -->
+    <script src="https://unpkg.com/mind-ar@1.2.5/dist/mindar-image.prod.js"></script>
+    <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
+    <script src="https://unpkg.com/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
     <style>
-      html, body { margin:0; height:100%; overflow:hidden; }
+      html,body { margin:0; height:100%; overflow:hidden; }
       #startBtn {
         position: fixed; left:50%; top:50%; transform:translate(-50%,-50%);
         z-index: 10; padding: 12px 18px; font-size: 16px;
       }
+      #status {
+        position: fixed; left:8px; bottom:8px; z-index: 11;
+        padding:6px 10px; background:rgba(0,0,0,.6); color:#fff; font:12px/1.3 monospace;
+        border-radius:6px; max-width: 90vw; white-space:pre-wrap;
+      }
     </style>
   </head>
   <body>
-    <button id="startBtn">Start AR</button>
+    <button id="startBtn" disabled>Start AR</button>
+    <div id="status">Loading…</div>
 
     <a-scene
       embedded
-      mindar-image="imageTargetSrc: ./targets.mind"
+      mindar-image="imageTargetSrc: ./targets.mind"  <!-- make sure this file exists -->
       vr-mode-ui="enabled: false"
       device-orientation-permission-ui="enabled: false">
-      
+
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
       <a-entity mindar-image-target="targetIndex: 0">
@@ -31,40 +39,42 @@
     </a-scene>
 
     <script>
+      const statusEl = document.getElementById('status');
       const startBtn = document.getElementById('startBtn');
       const sceneEl = document.querySelector('a-scene');
 
-      // Helper: get the AR system after the scene is fully initialized
-      function getArSystem() {
-        return sceneEl.systems && sceneEl.systems['mindar-image-system'];
-      }
+      function log(msg) { console.log(msg); statusEl.textContent = String(msg); }
 
-      // Ensure scene is loaded before we access systems
-      function onSceneReady() {
+      // 1) Verify A-Frame + MindAR adapter actually registered the system
+      sceneEl.addEventListener('loaded', () => {
+        const systems = Object.keys(sceneEl.systems || {});
+        console.log('A-Frame systems:', systems);
+        if (!sceneEl.systems['mindar-image-system']) {
+          log('MindAR A-Frame adapter did not register.\nCheck script order/URLs.');
+          startBtn.disabled = true;
+          return;
+        }
+        log('MindAR system detected. Ready to start.');
         startBtn.disabled = false;
-      }
+      });
 
-      if (sceneEl.hasLoaded) onSceneReady();
-      else sceneEl.addEventListener('loaded', onSceneReady);
+      // 2) MindAR lifecycle diagnostics (fires after arSystem.start())
+      sceneEl.addEventListener('arReady', () => log('arReady: camera + tracker started.'));
+      sceneEl.addEventListener('arError', (e) => log('arError: ' + (e?.detail || 'unknown')));
 
+      // 3) Start on user gesture (needed on iOS)
       startBtn.addEventListener('click', async () => {
         try {
-          // iOS/Safari: user gesture + HTTPS required
+          // Hint iOS to show the prompt early
           const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
           tmp.getTracks().forEach(t => t.stop());
 
-          const arSystem = getArSystem();
-          if (!arSystem) {
-            console.error('MindAR system not found. Installed systems:', sceneEl.systems);
-            alert('MindAR failed to load. Check script URLs and console for errors.');
-            return;
-          }
-
-          await arSystem.start(); // starts camera + tracker
+          const arSystem = sceneEl.systems['mindar-image-system'];
+          await arSystem.start();
           startBtn.style.display = 'none';
-        } catch (e) {
-          console.error(e);
-          alert('Camera permission denied or not available: ' + e);
+        } catch (err) {
+          console.error(err);
+          log('Camera permission denied or not available:\n' + err);
         }
       });
     </script>
